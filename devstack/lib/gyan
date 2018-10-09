@@ -1,0 +1,327 @@
+#!/bin/bash
+#
+# lib/gyan
+# Functions to control the configuration and operation of the **gyan** service
+
+# Dependencies:
+#
+# - ``functions`` file
+# - ``DEST``, ``DATA_DIR``, ``STACK_USER`` must be defined
+# - ``SERVICE_{TENANT_NAME|PASSWORD}`` must be defined
+
+# ``stack.sh`` calls the entry points in this order:
+#
+# - install_gyan
+# - configure_gyan
+# - create_gyan_conf
+# - create_gyan_accounts
+# - init_gyan
+# - start_gyan
+# - stop_gyan
+# - cleanup_gyan
+
+# Save trace setting
+XTRACE=$(set +o | grep xtrace)
+set +o xtrace
+
+
+# Defaults
+# --------
+
+# Set up default directories
+GYAN_REPO=${GYAN_REPO:-${GIT_BASE}/openstack/gyan.git}
+GYAN_BRANCH=${GYAN_BRANCH:-master}
+GYAN_DIR=$DEST/gyan
+
+GITREPO["python-gyanclient"]=${GYANCLIENT_REPO:-${GIT_BASE}/openstack/python-gyanclient.git}
+GITBRANCH["python-gyanclient"]=${GYANCLIENT_BRANCH:-master}
+GITDIR["python-gyanclient"]=$DEST/python-gyanclient
+
+GYAN_STATE_PATH=${GYAN_STATE_PATH:=$DATA_DIR/gyan}
+GYAN_AUTH_CACHE_DIR=${GYAN_AUTH_CACHE_DIR:-/var/cache/gyan}
+
+GYAN_CONF_DIR=/etc/gyan
+GYAN_CONF=$GYAN_CONF_DIR/gyan.conf
+GYAN_API_PASTE=$GYAN_CONF_DIR/api-paste.ini
+
+if is_ssl_enabled_service "gyan" || is_service_enabled tls-proxy; then
+    GYAN_SERVICE_PROTOCOL="https"
+fi
+
+# Toggle for deploying GYAN-API under a wsgi server
+GYAN_USE_UWSGI=${GYAN_USE_UWSGI:-True}
+
+
+# Public facing bits
+GYAN_SERVICE_HOST=${GYAN_SERVICE_HOST:-$SERVICE_HOST}
+GYAN_SERVICE_PORT=${GYAN_SERVICE_PORT:-8517}
+GYAN_SERVICE_PORT_INT=${GYAN_SERVICE_PORT_INT:-18517}
+GYAN_SERVICE_PROTOCOL=${GYAN_SERVICE_PROTOCOL:-$SERVICE_PROTOCOL}
+
+GYAN_TRUSTEE_DOMAIN_ADMIN_PASSWORD=${GYAN_TRUSTEE_DOMAIN_ADMIN_PASSWORD:-secret}
+
+# Support entry points installation of console scripts
+if [[ -d $GYAN_DIR/bin ]]; then
+    GYAN_BIN_DIR=$GYAN_DIR/bin
+else
+    GYAN_BIN_DIR=$(get_python_exec_prefix)
+fi
+
+GYAN_UWSGI=$GYAN_BIN_DIR/gyan-api-wsgi
+GYAN_UWSGI_CONF=$GYAN_CONF_DIR/gyan-api-uwsgi.ini
+
+GYAN_DB_TYPE=${GYAN_DB_TYPE:-sql}
+
+if is_ubuntu; then
+    UBUNTU_RELEASE_BASE_NUM=`lsb_release -r | awk '{print $2}' | cut -d '.' -f 1`
+fi
+
+# Functions
+# ---------
+
+# cleanup_gyan() - Remove residual data files, anything left over from previous
+# runs that a clean run would need to clean up
+function cleanup_gyan {
+    sudo rm -rf $GYAN_STATE_PATH $GYAN_AUTH_CACHE_DIR
+
+    remove_uwsgi_config "$GYAN_UWSGI_CONF" "$GYAN_UWSGI"
+}
+
+# configure_gyan() - Set config files, create data dirs, etc
+function configure_gyan {
+    # Put config files in ``/etc/gyan`` for everyone to find
+    if [[ ! -d $GYAN_CONF_DIR ]]; then
+        sudo mkdir -p $GYAN_CONF_DIR
+        sudo chown $STACK_USER $GYAN_CONF_DIR
+    fi
+
+    configure_rootwrap gyan
+
+    # Rebuild the config file from scratch
+    create_gyan_conf
+
+    create_api_paste_conf
+
+    write_uwsgi_config "$GYAN_UWSGI_CONF" "$GYAN_UWSGI" "/ml-infra"
+
+    if [[ "$USE_PYTHON3" = "True" ]]; then
+        # Switch off glance->swift communication as swift fails under py3.x
+        iniset /etc/glance/glance-api.conf glance_store default_store file
+    fi
+}
+
+
+# create_gyan_accounts() - Set up common required GYAN accounts
+#
+# Project              User         Roles
+# ------------------------------------------------------------------
+# SERVICE_PROJECT_NAME  gyan         service
+function create_gyan_accounts {
+
+    create_service_user "gyan" "admin"
+
+    if is_service_enabled gyan-api; then
+
+        local gyan_api_url
+        if [[ "$GYAN_USE_UWSGI" == "True" ]]; then
+            gyan_api_url="$GYAN_SERVICE_PROTOCOL://$GYAN_SERVICE_HOST/ml-infra"
+        else
+            gyan_api_url="$GYAN_SERVICE_PROTOCOL://$GYAN_SERVICE_HOST:$GYAN_SERVICE_PORT"
+        fi
+
+        local gyan_service=$(get_or_create_service "gyan" \
+            "ml-infra" "ML Infra As Service")
+        get_or_create_endpoint $gyan_service \
+            "$REGION_NAME" \
+            "$gyan_api_url/v1" \
+            "$gyan_api_url/v1" \
+            "$gyan_api_url/v1"
+    fi
+
+}
+
+# create_gyan_conf() - Create a new gyan.conf file
+function create_gyan_conf {
+
+    # (Re)create ``gyan.conf``
+    rm -f $GYAN_CONF
+    if [[ ${GYAN_DRIVER} == "tensorflow" ]]; then
+        iniset $GYAN_CONF DEFAULT ml_model_driver "ml_model.driver.TensorflowDriver"
+    fi
+    if [[ ${GYAN_DB_TYPE} == "sql" ]]; then
+        iniset $GYAN_CONF DEFAULT db_type sql
+    fi
+    iniset $GYAN_CONF DEFAULT debug "$ENABLE_DEBUG_LOG_LEVEL"
+    iniset $GYAN_CONF DEFAULT my_ip "$HOST_IP"
+    iniset $GYAN_CONF DEFAULT default_cpu 0
+    iniset $GYAN_CONF DEFAULT default_memory 0
+    iniset $GYAN_CONF DEFAULT default_disk 0
+    iniset $GYAN_CONF oslo_messaging_rabbit rabbit_userid $RABBIT_USERID
+    iniset $GYAN_CONF oslo_messaging_rabbit rabbit_password $RABBIT_PASSWORD
+    iniset $GYAN_CONF oslo_messaging_rabbit rabbit_host $RABBIT_HOST
+    iniset $GYAN_CONF database connection `database_connection_url gyan`
+    iniset $GYAN_CONF api host_ip "$GYAN_SERVICE_HOST"
+    iniset $GYAN_CONF api port "$GYAN_SERVICE_PORT"
+
+    iniset $GYAN_CONF keystone_auth auth_type password
+    iniset $GYAN_CONF keystone_auth username gyan
+    iniset $GYAN_CONF keystone_auth password $SERVICE_PASSWORD
+    iniset $GYAN_CONF keystone_auth project_name $SERVICE_PROJECT_NAME
+    iniset $GYAN_CONF keystone_auth project_domain_id default
+    iniset $GYAN_CONF keystone_auth user_domain_id default
+
+    # FIXME(pauloewerton): keystone_authtoken section is deprecated. Remove it
+    # after deprecation period.
+    iniset $GYAN_CONF keystone_authtoken admin_user gyan
+    iniset $GYAN_CONF keystone_authtoken admin_password $SERVICE_PASSWORD
+    iniset $GYAN_CONF keystone_authtoken admin_tenant_name $SERVICE_PROJECT_NAME
+
+    configure_auth_token_middleware $GYAN_CONF gyan $GYAN_AUTH_CACHE_DIR
+
+    iniset $GYAN_CONF keystone_auth auth_url $KEYSTONE_AUTH_URI_V3
+    iniset $GYAN_CONF keystone_authtoken www_authenticate_uri $KEYSTONE_SERVICE_URI_V3
+    iniset $GYAN_CONF keystone_authtoken auth_url $KEYSTONE_AUTH_URI_V3
+    iniset $GYAN_CONF keystone_authtoken auth_version v3
+
+
+    if is_fedora || is_suse; then
+        # gyan defaults to /usr/local/bin, but fedora and suse pip like to
+        # install things in /usr/bin
+        iniset $GYAN_CONF DEFAULT bindir "/usr/bin"
+    fi
+
+    if [ -n "$GYAN_STATE_PATH" ]; then
+        iniset $GYAN_CONF DEFAULT state_path "$GYAN_STATE_PATH"
+        iniset $GYAN_CONF oslo_concurrency lock_path "$GYAN_STATE_PATH"
+    fi
+
+    if [ "$SYSLOG" != "False" ]; then
+        iniset $GYAN_CONF DEFAULT use_syslog "True"
+    fi
+
+    # Format logging
+    if [ "$LOG_COLOR" == "True" ] && [ "$SYSLOG" == "False" ]; then
+        setup_colorized_logging $GYAN_CONF DEFAULT
+    else
+        # Show user_name and project_name instead of user_id and project_id
+        iniset $GYAN_CONF DEFAULT logging_context_format_string "%(asctime)s.%(msecs)03d %(levelname)s %(name)s [%(request_id)s %(user_name)s %(project_name)s] %(instance)s%(message)s"
+    fi
+
+    # Register SSL certificates if provided
+    if is_ssl_enabled_service gyan; then
+        ensure_certificates gyan
+
+        iniset $GYAN_CONF DEFAULT ssl_cert_file "$GYAN_SSL_CERT"
+        iniset $GYAN_CONF DEFAULT ssl_key_file "$GYAN_SSL_KEY"
+
+        iniset $GYAN_CONF DEFAULT enabled_ssl_apis "$GYAN_ENABLED_APIS"
+    fi
+}
+
+function create_api_paste_conf {
+    # copy api_paste.ini
+    cp $GYAN_DIR/etc/gyan/api-paste.ini $GYAN_API_PASTE
+}
+
+# create_gyan_cache_dir() - Part of the init_GYAN() process
+function create_gyan_cache_dir {
+    # Create cache dir
+    sudo mkdir -p $GYAN_AUTH_CACHE_DIR
+    sudo chown $STACK_USER $GYAN_AUTH_CACHE_DIR
+    rm -f $GYAN_AUTH_CACHE_DIR/*
+}
+
+
+# init_gyan() - Initialize databases, etc.
+function init_gyan {
+    # Only do this step once on the API node for an entire cluster.
+    if is_service_enabled gyan-api; then
+        if is_service_enabled $DATABASE_BACKENDS; then
+            # (Re)create gyan database
+            recreate_database gyan
+
+            # Migrate gyan database
+            $GYAN_BIN_DIR/gyan-db-manage upgrade
+        fi
+
+        if is_service_enabled gyan-etcd; then
+            install_etcd_server
+        fi
+        create_gyan_cache_dir
+    fi
+}
+
+# install_gyanclient() - Collect source and prepare
+function install_gyanclient {
+    if use_library_from_git "python-gyanclient"; then
+        git_clone_by_name "python-gyanclient"
+        setup_dev_lib "python-gyanclient"
+        sudo install -D -m 0644 -o $STACK_USER {${GITDIR["python-gyanclient"]}/tools/,/etc/bash_completion.d/}gyan.bash_completion
+    fi
+}
+
+# install_gyan() - Collect source and prepare
+function install_gyan {
+    git_clone $GYAN_REPO $GYAN_DIR $GYAN_BRANCH
+    setup_develop $GYAN_DIR
+}
+
+# start_gyan_api() - Start the API process ahead of other things
+function start_gyan_api {
+    # Get right service port for testing
+    local service_port=$GYAN_SERVICE_PORT
+    local service_protocol=$GYAN_SERVICE_PROTOCOL
+    if is_service_enabled tls-proxy; then
+        service_port=$GYAN_SERVICE_PORT_INT
+        service_protocol="http"
+    fi
+
+    local gyan_url
+    if [ "$GYAN_USE_UWSGI" == "True" ]; then
+        run_process gyan-api "$GYAN_BIN_DIR/uwsgi --procname-prefix gyan-api --ini $GYAN_UWSGI_CONF"
+        gyan_url=$service_protocol://$GYAN_SERVICE_HOST/ml-infra
+    else
+        run_process gyan-api "$GYAN_BIN_DIR/gyan-api"
+        gyan_url=$service_protocol://$GYAN_SERVICE_HOST:$service_port
+    fi
+
+    echo "Waiting for gyan-api to start..."
+    if ! wait_for_service $SERVICE_TIMEOUT $gyan_url; then
+        die $LINENO "gyan-api did not start"
+    fi
+
+    # Start proxies if enabled
+    if is_service_enabled tls-proxy; then
+        start_tls_proxy '*' $GYAN_SERVICE_PORT $GYAN_SERVICE_HOST $GYAN_SERVICE_PORT_INT &
+    fi
+}
+
+# start_gyan_compute() - Start Gyan compute agent
+function start_gyan_compute {
+    echo "Start gyan compute..."
+    run_process gyan-compute "$GYAN_BIN_DIR/gyan-compute"
+}
+
+
+# start_gyan() - Start running processes, including screen
+function start_gyan {
+
+    # ``run_process`` checks ``is_service_enabled``, it is not needed here
+    start_gyan_api
+    start_gyan_compute
+}
+
+# stop_gyan() - Stop running processes (non-screen)
+function stop_gyan {
+
+    if [ "$GYAN_USE_UWSGI" == "True" ]; then
+        disable_apache_site gyan
+        restart_apache_server
+    else
+        stop_process gyan-api
+    fi
+    stop_process gyan-compute
+}
+
+# Restore xtrace
+$XTRACE
