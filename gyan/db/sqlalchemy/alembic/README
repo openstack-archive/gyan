@@ -1,0 +1,11 @@
+Please see https://alembic.readthedocs.org/en/latest/index.html for general documentation
+
+To create alembic migrations use:
+$ gyan-db-manage revision --message "description of revision" --autogenerate
+
+Stamp db with most recent migration version, without actually running migrations
+$ gyan-db-manage stamp head
+
+Upgrade can be performed by:
+$ gyan-db-manage upgrade
+$ gyan-db-manage upgrade head
