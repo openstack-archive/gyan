@@ -251,11 +251,9 @@ function init_gyan {
 
 # install_gyanclient() - Collect source and prepare
 function install_gyanclient {
-    if use_library_from_git "python-gyanclient"; then
-        git_clone_by_name "python-gyanclient"
-        setup_dev_lib "python-gyanclient"
-        sudo install -D -m 0644 -o $STACK_USER {${GITDIR["python-gyanclient"]}/tools/,/etc/bash_completion.d/}gyan.bash_completion
-    fi
+    git_clone_by_name "python-gyanclient"
+    setup_dev_lib "python-gyanclient"
+    sudo install -D -m 0644 -o $STACK_USER {${GITDIR["python-gyanclient"]}/tools/,/etc/bash_completion.d/}gyan.bash_completion
 }
 
 # install_gyan() - Collect source and prepare

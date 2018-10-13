@@ -43,3 +43,18 @@ class Json(fields.FieldType):
 
 class JsonField(fields.AutoTypedField):
     AUTO_TYPE = Json()
+
+
+class ModelFieldType(fields.FieldType):
+    def coerce(self, obj, attr, value):
+        return value
+
+    def from_primitive(self, obj, attr, value):
+        return self.coerce(obj, attr, value)
+
+    def to_primitive(self, obj, attr, value):
+        return value
+
+
+class ModelField(fields.AutoTypedField):
+    AUTO_TYPE = ModelFieldType()
