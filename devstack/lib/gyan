@@ -305,6 +305,7 @@ function start_gyan_compute {
 function start_gyan {
 
     # ``run_process`` checks ``is_service_enabled``, it is not needed here
+    mkdir -p /opt/stack/data/gyan
     start_gyan_api
     start_gyan_compute
 }

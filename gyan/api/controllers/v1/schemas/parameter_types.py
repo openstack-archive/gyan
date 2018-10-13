@@ -95,3 +95,17 @@ hostname = {
     # real systems.
     'pattern': '^[a-zA-Z0-9-._]*$',
 }
+
+ml_model_name = {
+    'type': 'string',
+    'minLength': 1,
+    'maxLength': 255,
+    'pattern': '^[a-zA-Z0-9-._]*$'
+}
+
+ml_model_type = {
+    'type': 'string',
+    'minLength': 1,
+    'maxLength': 255,
+    'pattern': '^[a-zA-Z0-9-._]*$'
+}

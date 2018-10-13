@@ -18,8 +18,11 @@ _ml_model_properties = {}
 
 ml_model_create = {
     'type': 'object',
-    'properties': _ml_model_properties,
-    'required': ['name'],
+    'properties': {
+        "name": parameter_types.ml_model_name,
+        "type": parameter_types.ml_model_type
+    },
+    'required': ['name', 'type'],
     'additionalProperties': False
 }
 
