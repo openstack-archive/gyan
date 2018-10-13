@@ -28,7 +28,6 @@ CONF = gyan.conf.CONF
 LOG = logging.getLogger(__name__)
 
 
-@profiler.trace_cls("rpc")
 class API(object):
     """API for interacting with the compute manager."""
 
@@ -36,10 +35,11 @@ class API(object):
         self.rpcapi = rpcapi.API(context=context)
         super(API, self).__init__()
 
-    def ml_model_create(self, context, new_ml_model, extra_spec):
+    def ml_model_create(self, context, new_ml_model, **extra_spec):
         try:
-            host_state = self._schedule_ml_model(context, ml_model,
-                                                  extra_spec)
+            host_state = {
+                "host": "localhost"
+            } #self._schedule_ml_model(context, ml_model, extra_spec)
         except exception.NoValidHost:
             new_ml_model.status = consts.ERROR
             new_ml_model.status_reason = _(
@@ -51,9 +51,13 @@ class API(object):
             new_ml_model.status_reason = _("Unexpected exception occurred.")
             new_ml_model.save(context)
             raise
-
+        LOG.debug(host_state)
         self.rpcapi.ml_model_create(context, host_state['host'],
                                      new_ml_model)
+    
+    def ml_model_predict(self, context, ml_model_id, **kwargs):
+        self.rpcapi.ml_model_predict(context, ml_model_id,
+                                     **kwargs)
 
     def ml_model_delete(self, context, ml_model, *args):
         self._record_action_start(context, ml_model, ml_model_actions.DELETE)
