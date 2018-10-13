@@ -31,6 +31,7 @@ from sqlalchemy import orm
 from sqlalchemy import schema
 from sqlalchemy import sql
 from sqlalchemy import String
+from sqlalchemy import BLOB
 from sqlalchemy import Text
 from sqlalchemy.types import TypeDecorator, TEXT
 
@@ -120,11 +121,12 @@ class ML_Model(Base):
     name = Column(String(255))
     status = Column(String(20))
     status_reason = Column(Text, nullable=True)
-    task_state = Column(String(20))
-    host_id = Column(String(255))
-    status_detail = Column(String(50))
-    deployed = Column(String(50))
+    host_id = Column(String(255), nullable=True)
     deployed = Column(Text, nullable=True)
+    url = Column(Text, nullable=True)
+    hints = Column(Text, nullable=True)
+    ml_type = Column(String(255), nullable=True)
+    ml_data = Column(BLOB, nullable=True)
     started_at = Column(DateTime)
 
 
