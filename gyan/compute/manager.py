@@ -49,17 +49,9 @@ class Manager(periodic_task.PeriodicTasks):
         self.host = CONF.compute.host
         self._resource_tracker = None
 
-    def ml_model_create(self, context, limits, requested_networks,
-                         requested_volumes, ml_model, run, pci_requests=None):
-        @utils.synchronized(ml_model.uuid)
-        def do_ml_model_create():
-            created_ml_model = self._do_ml_model_create(
-                context, ml_model, requested_networks, requested_volumes,
-                pci_requests, limits)
-            if run:
-                self._do_ml_model_start(context, created_ml_model)
-
-        utils.spawn_n(do_ml_model_create)
+    def ml_model_create(self, context, ml_model):
+        db_ml_model = objects.ML_Model.get_by_uuid_db(context, ml_model["id"])
+        pass
 
     @wrap_ml_model_event(prefix='compute')
     def _do_ml_model_create(self, context, ml_model, requested_networks,

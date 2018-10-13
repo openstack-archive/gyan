@@ -30,7 +30,6 @@ def check_ml_model_host(func):
     return wrap
 
 
-@profiler.trace_cls("rpc")
 class API(rpc_service.API):
     """Client side of the ml_model compute rpc API.
 

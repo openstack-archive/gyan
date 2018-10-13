@@ -82,10 +82,10 @@ class V1(controllers_base.APIBase):
                                         'hosts', '',
                                         bookmark=True)]
         v1.ml_models = [link.make_link('self', pecan.request.host_url,
-                                    'ml_models', ''),
+                                    'ml-models', ''),
                      link.make_link('bookmark',
                                     pecan.request.host_url,
-                                    'ml_models', '',
+                                    'ml-models', '',
                                     bookmark=True)]
         return v1
 
@@ -147,8 +147,8 @@ class Controller(controllers_base.Controller):
                    {'url': pecan.request.url,
                     'method': pecan.request.method,
                     'body': pecan.request.body})
-            LOG.debug(msg)
-
+            # LOG.debug(msg)
+        LOG.debug(args)
         return super(Controller, self)._route(args)
 
 
