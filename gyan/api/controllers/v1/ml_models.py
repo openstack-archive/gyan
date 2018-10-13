@@ -10,6 +10,7 @@
 #    License for the specific language governing permissions and limitations
 #    under the License.
 
+import base64
 import shlex
 
 from oslo_log import log as logging
@@ -74,12 +75,13 @@ class MLModelController(base.Controller):
     """Controller for MLModels."""
 
     _custom_actions = {
-        'train': ['POST'],
+        'upload_trained_model': ['POST'],
         'deploy': ['GET'],
-        'undeploy': ['GET']
+        'undeploy': ['GET'],
+        'predict': ['POST']
     }
 
-    
+
     @pecan.expose('json')
     @exception.wrap_pecan_controller_exception
     def get_all(self, **kwargs):
@@ -149,25 +151,48 @@ class MLModelController(base.Controller):
             context.all_projects = True
         ml_model = utils.get_ml_model(ml_model_ident)
         check_policy_on_ml_model(ml_model.as_dict(), "ml_model:get_one")
-        if ml_model.node:
-            compute_api = pecan.request.compute_api
-            try:
-                ml_model = compute_api.ml_model_show(context, ml_model)
-            except exception.MLModelHostNotUp:
-                raise exception.ServerNotUsable
-
         return view.format_ml_model(context, pecan.request.host_url,
                                      ml_model.as_dict())
 
     @base.Controller.api_version("1.0")
     @pecan.expose('json')
+    @exception.wrap_pecan_controller_exception
+    def upload_trained_model(self, ml_model_ident, **kwargs):
+        context = pecan.request.context
+        LOG.debug(ml_model_ident)
+        ml_model = utils.get_ml_model(ml_model_ident)
+        LOG.debug(ml_model)
+        ml_model.ml_data = pecan.request.body
+        ml_model.save(context)
+        pecan.response.status = 200
+        compute_api = pecan.request.compute_api
+        new_model = view.format_ml_model(context, pecan.request.host_url,
+                                         ml_model.as_dict())
+        compute_api.ml_model_create(context, new_model)
+        return new_model
+    
+    @base.Controller.api_version("1.0")
+    @pecan.expose('json')
+    @exception.wrap_pecan_controller_exception
+    def predict(self, ml_model_ident, **kwargs):
+        context = pecan.request.context
+        LOG.debug(ml_model_ident)
+        ml_model = utils.get_ml_model(ml_model_ident)
+        pecan.response.status = 200
+        compute_api = pecan.request.compute_api
+        predict_dict = {
+            "data": base64.b64encode(pecan.request.POST['file'].file.read())
+        }
+        prediction = compute_api.ml_model_predict(context, ml_model_ident, **predict_dict)
+        return prediction
+
+    @base.Controller.api_version("1.0")
+    @pecan.expose('json')
     @api_utils.enforce_content_types(['application/json'])
     @exception.wrap_pecan_controller_exception
-    @validation.validate_query_param(pecan.request, schema.query_param_create)
     @validation.validated(schema.ml_model_create)
     def post(self, **ml_model_dict):
         return self._do_post(**ml_model_dict)
-
 
     def _do_post(self, **ml_model_dict):
         """Create or run a new ml model.
@@ -175,7 +200,6 @@ class MLModelController(base.Controller):
         :param ml_model_dict: a ml_model within the request body.
         """
         context = pecan.request.context
-        compute_api = pecan.request.compute_api
         policy.enforce(context, "ml_model:create",
                        action="ml_model:create")
 
@@ -183,22 +207,24 @@ class MLModelController(base.Controller):
         ml_model_dict['user_id'] = context.user_id
         name = ml_model_dict.get('name')
         ml_model_dict['name'] = name
-        
-        ml_model_dict['status'] = consts.CREATING
+
+        ml_model_dict['status'] = consts.CREATED
+        ml_model_dict['ml_type'] = ml_model_dict['type']
         extra_spec = {}
         extra_spec['hints'] = ml_model_dict.get('hints', None)
+        #ml_model_dict["model_data"] = open("/home/bharath/model.zip", "rb").read()
         new_ml_model = objects.ML_Model(context, **ml_model_dict)
-        new_ml_model.create(context)
-
-        compute_api.ml_model_create(context, new_ml_model, **kwargs)
+        ml_model = new_ml_model.create(context)
+        LOG.debug(new_ml_model)
+        #compute_api.ml_model_create(context, new_ml_model)
         # Set the HTTP Location Header
         pecan.response.location = link.build_url('ml_models',
-                                                 new_ml_model.uuid)
-        pecan.response.status = 202
-        return view.format_ml_model(context, pecan.request.node_url,
-                                     new_ml_model.as_dict())
+                                                 ml_model.id)
+        pecan.response.status = 201
+        return view.format_ml_model(context, pecan.request.host_url,
+                                     ml_model.as_dict())
 
-    
+
     @pecan.expose('json')
     @exception.wrap_pecan_controller_exception
     @validation.validated(schema.ml_model_update)
@@ -217,11 +243,11 @@ class MLModelController(base.Controller):
         return view.format_ml_model(context, pecan.request.node_url,
                                      ml_model.as_dict())
 
-    
+
     @pecan.expose('json')
     @exception.wrap_pecan_controller_exception
     @validation.validate_query_param(pecan.request, schema.query_param_delete)
-    def delete(self, ml_model_ident, force=False, **kwargs):
+    def delete(self, ml_model_ident, **kwargs):
         """Delete a ML Model.
 
         :param ml_model_ident: UUID or Name of a ML Model.
@@ -230,27 +256,7 @@ class MLModelController(base.Controller):
         context = pecan.request.context
         ml_model = utils.get_ml_model(ml_model_ident)
         check_policy_on_ml_model(ml_model.as_dict(), "ml_model:delete")
-        try:
-            force = strutils.bool_from_string(force, strict=True)
-        except ValueError:
-            bools = ', '.join(strutils.TRUE_STRINGS + strutils.FALSE_STRINGS)
-            raise exception.InvalidValue(_('Valid force values are: %s')
-                                         % bools)
-        stop = kwargs.pop('stop', False)
-        try:
-            stop = strutils.bool_from_string(stop, strict=True)
-        except ValueError:
-            bools = ', '.join(strutils.TRUE_STRINGS + strutils.FALSE_STRINGS)
-            raise exception.InvalidValue(_('Valid stop values are: %s')
-                                         % bools)
-        compute_api = pecan.request.compute_api
-        if not force:
-            utils.validate_ml_model_state(ml_model, 'delete')
-        ml_model.status = consts.DELETING
-        if ml_model.node:
-            compute_api.ml_model_delete(context, ml_model, force)
-        else:
-            ml_model.destroy(context)
+        ml_model.destroy(context)
         pecan.response.status = 204
 
 
@@ -261,15 +267,19 @@ class MLModelController(base.Controller):
 
         :param ml_model_ident: UUID or Name of a ML Model.
         """
+        context = pecan.request.context
         ml_model = utils.get_ml_model(ml_model_ident)
         check_policy_on_ml_model(ml_model.as_dict(), "ml_model:deploy")
         utils.validate_ml_model_state(ml_model, 'deploy')
         LOG.debug('Calling compute.ml_model_deploy with %s',
-                  ml_model.uuid)
-        context = pecan.request.context
-        compute_api = pecan.request.compute_api
-        compute_api.ml_model_deploy(context, ml_model)
+                  ml_model.id)
+        ml_model.status =  consts.DEPLOYED
+        url = pecan.request.url.replace("deploy", "predict")
+        ml_model.url = url
+        ml_model.save(context)
         pecan.response.status = 202
+        return view.format_ml_model(context, pecan.request.host_url,
+                                     ml_model.as_dict())
 
     @pecan.expose('json')
     @exception.wrap_pecan_controller_exception
@@ -278,12 +288,15 @@ class MLModelController(base.Controller):
 
         :param ml_model_ident: UUID or Name of a ML Model.
         """
+        context = pecan.request.context
         ml_model = utils.get_ml_model(ml_model_ident)
         check_policy_on_ml_model(ml_model.as_dict(), "ml_model:deploy")
         utils.validate_ml_model_state(ml_model, 'undeploy')
         LOG.debug('Calling compute.ml_model_deploy with %s',
-                  ml_model.uuid)
-        context = pecan.request.context
-        compute_api = pecan.request.compute_api
-        compute_api.ml_model_undeploy(context, ml_model)
+                  ml_model.id)
+        ml_model.status = consts.SCHEDULED
+        ml_model.url = None
+        ml_model.save(context)
         pecan.response.status = 202
+        return view.format_ml_model(context, pecan.request.host_url,
+                                     ml_model.as_dict())

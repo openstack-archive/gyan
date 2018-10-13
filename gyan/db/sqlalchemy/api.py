@@ -1,5 +1,3 @@
-# Copyright 2013 Hewlett-Packard Development Company, L.P.
-#
 # Licensed under the Apache License, Version 2.0 (the "License"); you may
 # not use this file except in compliance with the License. You may obtain
 # a copy of the License at
@@ -13,6 +11,7 @@
 # under the License.
 
 """SQLAlchemy storage backend."""
+from oslo_log import log as logging
 
 from oslo_db import exception as db_exc
 from oslo_db.sqlalchemy import session as db_session
@@ -39,6 +38,7 @@ profiler_sqlalchemy = importutils.try_import('osprofiler.sqlalchemy')
 CONF = gyan.conf.CONF
 
 _FACADE = None
+LOG = logging.getLogger(__name__)
 
 
 def _create_facade_lazily():
@@ -90,7 +90,7 @@ def add_identity_filter(query, value):
     if strutils.is_int_like(value):
         return query.filter_by(id=value)
     elif uuidutils.is_uuid_like(value):
-        return query.filter_by(uuid=value)
+        return query.filter_by(id=value)
     else:
         raise exception.InvalidIdentity(identity=value)
 
@@ -230,16 +230,17 @@ class Connection(object):
 
     def list_ml_models(self, context, filters=None, limit=None,
                       marker=None, sort_key=None, sort_dir=None):
-        query = model_query(models.Capsule)
+        query = model_query(models.ML_Model)
         query = self._add_project_filters(context, query)
         query = self._add_ml_models_filters(query, filters)
-        return _paginate_query(models.Capsule, limit, marker,
+        LOG.debug(filters)
+        return _paginate_query(models.ML_Model, limit, marker,
                                sort_key, sort_dir, query)
 
     def create_ml_model(self, context, values):
         # ensure defaults are present for new ml_models
-        if not values.get('uuid'):
-            values['uuid'] = uuidutils.generate_uuid()
+        if not values.get('id'):
+            values['id'] = uuidutils.generate_uuid()
         ml_model = models.ML_Model()
         ml_model.update(values)
         try:
@@ -252,7 +253,7 @@ class Connection(object):
     def get_ml_model_by_uuid(self, context, ml_model_uuid):
         query = model_query(models.ML_Model)
         query = self._add_project_filters(context, query)
-        query = query.filter_by(uuid=ml_model_uuid)
+        query = query.filter_by(id=ml_model_uuid)
         try:
             return query.one()
         except NoResultFound:
@@ -261,7 +262,7 @@ class Connection(object):
     def get_ml_model_by_name(self, context, ml_model_name):
         query = model_query(models.ML_Model)
         query = self._add_project_filters(context, query)
-        query = query.filter_by(meta_name=ml_model_name)
+        query = query.filter_by(name=ml_model_name)
         try:
             return query.one()
         except NoResultFound:

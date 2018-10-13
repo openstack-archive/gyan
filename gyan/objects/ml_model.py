@@ -22,6 +22,7 @@ from gyan.objects import fields as z_fields
 
 LOG = logging.getLogger(__name__)
 
+
 @base.GyanObjectRegistry.register
 class ML_Model(base.GyanPersistentObject, base.GyanObject):
     VERSION = '1'
@@ -35,16 +36,19 @@ class ML_Model(base.GyanPersistentObject, base.GyanObject):
         'status_reason': fields.StringField(nullable=True),
         'url': fields.StringField(nullable=True),
         'deployed': fields.BooleanField(nullable=True),
-        'node': fields.UUIDField(nullable=True),
         'hints': fields.StringField(nullable=True),
         'created_at': fields.DateTimeField(tzinfo_aware=False, nullable=True),
-        'updated_at': fields.DateTimeField(tzinfo_aware=False, nullable=True)
+        'updated_at': fields.DateTimeField(tzinfo_aware=False, nullable=True),
+        'ml_data': z_fields.ModelField(nullable=True),
+        'ml_type': fields.StringField(nullable=True)
     }
 
     @staticmethod
     def _from_db_object(ml_model, db_ml_model):
         """Converts a database entity to a formal object."""
         for field in ml_model.fields:
+            if 'field' == 'ml_data':
+                continue
             setattr(ml_model, field, db_ml_model[field])
 
         ml_model.obj_reset_changes()
@@ -67,6 +71,17 @@ class ML_Model(base.GyanPersistentObject, base.GyanObject):
         db_ml_model = dbapi.get_ml_model_by_uuid(context, uuid)
         ml_model = ML_Model._from_db_object(cls(context), db_ml_model)
         return ml_model
+    
+    @base.remotable_classmethod
+    def get_by_uuid_db(cls, context, uuid):
+        """Find a ml model based on uuid and return a :class:`ML_Model` object.
+
+        :param uuid: the uuid of a ml model.
+        :param context: Security context
+        :returns: a :class:`ML_Model` object.
+        """
+        db_ml_model = dbapi.get_ml_model_by_uuid(context, uuid)
+        return db_ml_model
 
     @base.remotable_classmethod
     def get_by_name(cls, context, name):
@@ -125,7 +140,7 @@ class ML_Model(base.GyanPersistentObject, base.GyanObject):
         """
         values = self.obj_get_changes()
         db_ml_model = dbapi.create_ml_model(context, values)
-        self._from_db_object(self, db_ml_model)
+        return self._from_db_object(self, db_ml_model)
 
     @base.remotable
     def destroy(self, context=None):
@@ -138,7 +153,26 @@ class ML_Model(base.GyanPersistentObject, base.GyanObject):
                         A context should be set when instantiating the
                         object, e.g.: ML Model(context)
         """
-        dbapi.destroy_ml_model(context, self.uuid)
+        dbapi.destroy_ml_model(context, self.id)
+        self.obj_reset_changes()
+
+    @base.remotable
+    def save(self, context=None):
+        """Save updates to this ML Model.
+
+        Updates will be made column by column based on the result
+        of self.what_changed().
+
+        :param context: Security context. NOTE: This should only
+                        be used internally by the indirection_api.
+                        Unfortunately, RPC requires context as the first
+                        argument, even though we don't use it.
+                        A context should be set when instantiating the
+                        object, e.g.: ML Model(context)
+        """
+        updates = self.obj_get_changes()
+        dbapi.update_ml_model(context, self.id, updates)
+
         self.obj_reset_changes()
 
     def obj_load_attr(self, attrname):
