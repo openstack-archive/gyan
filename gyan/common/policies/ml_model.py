@@ -106,13 +106,24 @@ rules = [
         ]
     ),
     policy.DocumentedRuleDefault(
-        name=ML_MODEL % 'upload',
+        name=ML_MODEL % 'upload_trained_model',
         check_str=base.RULE_ADMIN_OR_OWNER,
         description='Upload the trained ML Model',
         operations=[
             {
-                'path': '/v1/ml_models/{ml_model_ident}/upload',
+                'path': '/v1/ml_models/{ml_model_ident}/upload_trained_model',
                 'method': 'POST'
+            }
+        ]
+    ),
+    policy.DocumentedRuleDefault(
+        name=ML_MODEL % 'deploy',
+        check_str=base.RULE_ADMIN_OR_OWNER,
+        description='Upload the trained ML Model',
+        operations=[
+            {
+                'path': '/v1/ml_models/{ml_model_ident}/deploy',
+                'method': 'GET'
             }
         ]
     ),

@@ -23,6 +23,7 @@ import functools
 import inspect
 import json
 import mimetypes
+import os
 
 from oslo_concurrency import processutils
 from oslo_context import context as common_context
@@ -44,7 +45,7 @@ CONF = gyan.conf.CONF
 LOG = logging.getLogger(__name__)
 
 VALID_STATES = {
-    'deploy': [consts.CREATED, consts.UNDEPLOYED],
+    'deploy': [consts.CREATED, consts.UNDEPLOYED, consts.SCHEDULED],
     'undeploy': [consts.DEPLOYED]
 }
 def safe_rstrip(value, chars=None):
@@ -162,7 +163,7 @@ def get_ml_model(ml_model_ident):
 def validate_ml_model_state(ml_model, action):
     if ml_model.status not in VALID_STATES[action]:
         raise exception.InvalidStateException(
-            id=ml_model.uuid,
+            id=ml_model.id,
             action=action,
             actual_state=ml_model.status)
 
@@ -253,3 +254,9 @@ def decode_file_data(data):
         return base64.b64decode(data)
     except (TypeError, binascii.Error):
         raise exception.Base64Exception()
+
+
+def save_model(path, model):
+    file_path = os.path.join(path, model.id)
+    with open(file_path+'.zip', 'wb') as f:
+        f.write(model.ml_data)
