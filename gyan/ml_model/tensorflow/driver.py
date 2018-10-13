@@ -15,8 +15,13 @@ import datetime
 import eventlet
 import functools
 import types
+import png
+import os
+import tempfile
+import numpy as np
 
-from docker import errors
+import tensorflow as tf
+
 from oslo_log import log as logging
 from oslo_utils import timeutils
 from oslo_utils import uuidutils
@@ -46,6 +51,24 @@ class TensorflowDriver(driver.MLModelDriver):
     def create(self, context, ml_model):
         return ml_model
         pass
+
+    def _load(self, session, path):
+        saver = tf.train.import_meta_graph(path + '/model.meta')
+        saver.restore(session, tf.train.latest_checkpoint(path))
+        return tf.get_default_graph()
+
+    def predict(self, context, ml_model_path, data):
+        session = tf.Session()
+        graph = self._load(session, ml_model_path)
+        img_file, img_path = tempfile.mkstemp()
+        with os.fdopen(img_file, 'wb') as f:
+            f.write(data)
+        png_data = png.Reader(img_path)
+        img = np.array(list(png_data.read()[2]))
+        img = img.reshape(1, 784)
+        tensor = graph.get_tensor_by_name('x:0')
+        prediction = graph.get_tensor_by_name('classification:0')
+        return {"data": session.run(prediction, feed_dict={tensor:img})[0]}
 
 
     def delete(self, context, ml_model, force):
