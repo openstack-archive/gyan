@@ -1,5 +1,3 @@
-#    Copyright 2016 IBM Corp.
-#
 #    Licensed under the Apache License, Version 2.0 (the "License"); you may
 #    not use this file except in compliance with the License. You may obtain
 #    a copy of the License at
@@ -30,7 +28,6 @@ def check_ml_model_host(func):
     return wrap
 
 
-@profiler.trace_cls("rpc")
 class API(rpc_service.API):
     """Client side of the ml_model compute rpc API.
 
@@ -50,6 +47,10 @@ class API(rpc_service.API):
     def ml_model_create(self, context, host, ml_model):
         self._cast(host, 'ml_model_create', 
                    ml_model=ml_model)
+
+    def ml_model_predict(self, context, ml_model_id, **kwargs):
+        return self._call("localhost", 'ml_model_predict', 
+                   ml_model_id=ml_model_id, kwargs=kwargs)
 
     @check_ml_model_host
     def ml_model_delete(self, context, ml_model, force):
