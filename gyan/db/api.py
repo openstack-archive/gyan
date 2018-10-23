@@ -116,6 +116,88 @@ def update_ml_model(context, ml_model_id, values):
 
 
 @profiler.trace("db")
+def list_flavors(context, filters=None, limit=None, marker=None,
+                    sort_key=None, sort_dir=None):
+    """List matching Flavors.
+
+    Return a list of the specified columns for all flavors that match
+    the specified filters.
+
+    :param context: The security context
+    :param filters: Filters to apply. Defaults to None.
+    :param limit: Maximum number of flavors to return.
+    :param marker: the last item of the previous page; we return the next
+                   result set.
+    :param sort_key: Attribute by which results should be sorted.
+    :param sort_dir: Direction in which results should be sorted.
+                     (asc, desc)
+    :returns: A list of tuples of the specified columns.
+    """
+    return _get_dbdriver_instance().list_flavors(
+        context, filters, limit, marker, sort_key, sort_dir)
+
+
+@profiler.trace("db")
+def create_flavor(context, values):
+    """Create a new Flavor.
+
+    :param context: The security context
+    :param values: A dict containing several items used to identify
+                   and track the ML Model
+    :returns: A ML Model.
+    """
+    return _get_dbdriver_instance().create_flavor(context, values)
+
+
+@profiler.trace("db")
+def get_flavor_by_uuid(context, flavor_uuid):
+    """Return a Flavor.
+
+    :param context: The security context
+    :param flavor_uuid: The uuid of a flavor.
+    :returns: A Flavor.
+    """
+    return _get_dbdriver_instance().get_flavor_by_uuid(
+        context, flavor_uuid)
+
+
+@profiler.trace("db")
+def get_flavor_by_name(context, flavor_name):
+    """Return a Flavor.
+
+    :param context: The security context
+    :param flavor_name: The name of a Flavor.
+    :returns: A Flavor.
+    """
+    return _get_dbdriver_instance().get_flavor_by_name(
+        context, flavor_name)
+
+
+@profiler.trace("db")
+def destroy_flavor(context, flavor_id):
+    """Destroy a flavor and all associated interfaces.
+
+    :param context: Request context
+    :param flavor_id: The id or uuid of a flavor.
+    """
+    return _get_dbdriver_instance().destroy_flavor(context, flavor_id)
+
+
+@profiler.trace("db")
+def update_flavor(context, flavor_id, values):
+    """Update properties of a flavor.
+
+    :param context: Request context
+    :param flavor_id: The id or uuid of a flavor.
+    :param values: The properties to be updated
+    :returns: A Flavor.
+    :raises: FlavorNotFound
+    """
+    return _get_dbdriver_instance().update_flavor(
+        context, flavor_id, values)
+
+
+@profiler.trace("db")
 def list_compute_hosts(context, filters=None, limit=None, marker=None,
                        sort_key=None, sort_dir=None):
     """List matching compute hosts.

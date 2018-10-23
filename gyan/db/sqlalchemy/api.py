@@ -305,3 +305,80 @@ class Connection(object):
         filter_names = ['uuid', 'project_id', 'user_id']
         return self._add_filters(query, models.ML_Model, filters=filters,
                                  filter_names=filter_names)
+
+    def list_flavors(self, context, filters=None, limit=None,
+                      marker=None, sort_key=None, sort_dir=None):
+        query = model_query(models.Flavor)
+        query = self._add_flavors_filters(query, filters)
+        LOG.debug(filters)
+        return _paginate_query(models.Flavor, limit, marker,
+                               sort_key, sort_dir, query)
+
+    def create_flavor(self, context, values):
+        # ensure defaults are present for new flavors
+        if not values.get('id'):
+            values['id'] = uuidutils.generate_uuid()
+        flavor = models.Flavor()
+        flavor.update(values)
+        try:
+            flavor.save()
+        except db_exc.DBDuplicateEntry:
+            raise exception.FlavorAlreadyExists(field='UUID',
+                                                 value=values['uuid'])
+        return flavor
+
+    def get_flavor_by_uuid(self, context, flavor_uuid):
+        query = model_query(models.Flavor)
+        query = self._add_project_filters(context, query)
+        query = query.filter_by(id=flavor_uuid)
+        try:
+            return query.one()
+        except NoResultFound:
+            raise exception.FlavorNotFound(flavor=flavor_uuid)
+
+    def get_flavor_by_name(self, context, flavor_name):
+        query = model_query(models.Flavor)
+        query = self._add_project_filters(context, query)
+        query = query.filter_by(name=flavor_name)
+        try:
+            return query.one()
+        except NoResultFound:
+            raise exception.FlavorNotFound(flavor=flavor_name)
+        except MultipleResultsFound:
+            raise exception.Conflict('Multiple flavors exist with same '
+                                     'name. Please use the flavor uuid '
+                                     'instead.')
+
+    def destroy_flavor(self, context, flavor_id):
+        session = get_session()
+        with session.begin():
+            query = model_query(models.Flavor, session=session)
+            query = add_identity_filter(query, flavor_id)
+            count = query.delete()
+            if count != 1:
+                raise exception.FlavorNotFound(flavor_id)
+
+    def update_flavor(self, context, flavor_id, values):
+        if 'id' in values:
+            msg = _("Cannot overwrite UUID for an existing ML Model.")
+            raise exception.InvalidParameterValue(err=msg)
+
+        return self._do_update_flavor_id(flavor_id, values)
+
+    def _do_update_flavor_id(self, flavor_id, values):
+        session = get_session()
+        with session.begin():
+            query = model_query(models.Flavor, session=session)
+            query = add_identity_filter(query, flavor_id)
+            try:
+                ref = query.with_lockmode('update').one()
+            except NoResultFound:
+                raise exception.FlavorNotFound(flavor=flavor_id)
+
+            ref.update(values)
+        return ref
+
+    def _add_flavors_filters(self, query, filters):
+        filter_names = ['id']
+        return self._add_filters(query, models.Flavor, filters=filters,
+                                 filter_names=filter_names)

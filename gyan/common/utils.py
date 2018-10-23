@@ -160,6 +160,14 @@ def get_ml_model(ml_model_ident):
 
     return ml_model
 
+def get_flavor(flavor_ident):
+    flavor = api_utils.get_resource('Flavor', flavor_ident)
+    if not flavor:
+        pecan.abort(404, ('Not found; the ml model you requested '
+                          'does not exist.'))
+
+    return flavor
+
 def validate_ml_model_state(ml_model, action):
     if ml_model.status not in VALID_STATES[action]:
         raise exception.InvalidStateException(

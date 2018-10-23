@@ -11,13 +11,16 @@
 #    under the License.
 
 from gyan.objects import compute_host
+from gyan.objects import flavor
 from gyan.objects import ml_model
 
 
 ComputeHost = compute_host.ComputeHost
+Flavor = flavor.Flavor
 ML_Model = ml_model.ML_Model
 
 __all__ = (
     'ComputeHost',
-    'ML_Model'
+    'ML_Model',
+    'Flavor'
 )

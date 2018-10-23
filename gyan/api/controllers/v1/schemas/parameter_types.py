@@ -47,6 +47,50 @@ ml_model_name = {
     'pattern': '^[a-zA-Z0-9][a-zA-Z0-9_.-]+$'
 }
 
+flavor_name = {
+    'type': ['string', 'null'],
+    'minLength': 2,
+    'maxLength': 255,
+    'pattern': '^[a-zA-Z0-9][a-zA-Z0-9_.-]+$'
+}
+
+flavor_cpu = {
+    'type': ['number', 'integer', 'null'],
+    'minLength': 2,
+    'maxLength': 255
+}
+
+flavor_driver = {
+    'type': ['string', 'null'],
+    'minLength': 2,
+    'maxLength': 255,
+    'pattern': '^[a-zA-Z0-9][a-zA-Z0-9_.-]+$'
+}
+
+flavor_disk = {
+    'type': ['string', 'null'],
+    'minLength': 2,
+    'maxLength': 255,
+}
+
+flavor_memory = {
+    'type': ['string', 'null'],
+    'minLength': 2,
+    'maxLength': 255
+}
+
+flavor_additional_details = {
+    'type': ['object', 'null'],
+    'minLength': 2,
+    'maxLength': 255
+}
+
+flavor_python_version = {
+    'type': ['string', 'null', 'number', 'integer'],
+    'minLength': 2,
+    'maxLength': 255
+}
+
 hex_uuid = {
     'type': 'string',
     'maxLength': 32,

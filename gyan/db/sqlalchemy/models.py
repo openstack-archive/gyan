@@ -141,3 +141,20 @@ class ComputeHost(Base):
     hostname = Column(String(255), nullable=False)
     status = Column(String(255), nullable=False)
     type = Column(String(255), nullable=False)
+
+
+class Flavor(Base):
+    """Represents a Flavor. """
+
+    __tablename__ = 'flavor'
+    __table_args__ = (
+        table_args()
+    )
+    id = Column(String(36), primary_key=True, nullable=False)
+    name = Column(String(255), nullable=False)
+    python_version = Column(String(255), nullable=False)
+    cpu = Column(String(255), nullable=False)
+    driver = Column(String(255), nullable=False)
+    memory = Column(String(255), nullable=False)
+    disk = Column(String(255), nullable=False)
+    additional_details = Column(Text, nullable=False)

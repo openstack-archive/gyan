@@ -14,11 +14,13 @@ import itertools
 
 from gyan.common.policies import host
 from gyan.common.policies import base
+from gyan.common.policies import flavor
 from gyan.common.policies import ml_model
 
 def list_rules():
     return itertools.chain(
         base.list_rules(),
         host.list_rules(),
-        ml_model.list_rules()
+        ml_model.list_rules(),
+        flavor.list_rules()
     )

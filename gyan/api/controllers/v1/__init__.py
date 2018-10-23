@@ -22,6 +22,7 @@ import pecan
 from gyan.api.controllers import base as controllers_base
 from gyan.api.controllers import link
 from gyan.api.controllers.v1 import hosts as host_controller
+from gyan.api.controllers.v1 import flavors as flavor_controller
 from gyan.api.controllers.v1 import ml_models as ml_model_controller
 from gyan.api.controllers import versions as ver
 from gyan.api import http_error
@@ -59,7 +60,8 @@ class V1(controllers_base.APIBase):
         'media_types',
         'links',
         'hosts',
-        'ml_models'
+        'ml_models',
+        'flavors'
     )
 
     @staticmethod
@@ -81,6 +83,12 @@ class V1(controllers_base.APIBase):
                                         pecan.request.host_url,
                                         'hosts', '',
                                         bookmark=True)]
+        v1.flavors = [link.make_link('self', pecan.request.host_url,
+                                   'flavors', ''),
+                    link.make_link('bookmark',
+                                   pecan.request.host_url,
+                                   'flavors', '',
+                                   bookmark=True)]
         v1.ml_models = [link.make_link('self', pecan.request.host_url,
                                     'ml-models', ''),
                      link.make_link('bookmark',
@@ -95,6 +103,7 @@ class Controller(controllers_base.Controller):
 
     hosts = host_controller.HostController()
     ml_models = ml_model_controller.MLModelController()
+    flavors = flavor_controller.FlavorController()
 
     @pecan.expose('json')
     def get(self):
@@ -148,7 +157,7 @@ class Controller(controllers_base.Controller):
                     'method': pecan.request.method,
                     'body': pecan.request.body})
             # LOG.debug(msg)
-        LOG.debug(args)
+        # LOG.debug(args)
         return super(Controller, self)._route(args)
 
 
