@@ -154,6 +154,7 @@ function create_gyan_conf {
     iniset $GYAN_CONF DEFAULT debug "$ENABLE_DEBUG_LOG_LEVEL"
     iniset $GYAN_CONF DEFAULT my_ip "$HOST_IP"
     iniset $GYAN_CONF DEFAULT host  "$HOST_IP"
+    iniset $GYAN_CONF DEFAULT transport_url  "rabbit://stackrabbit:$RABBIT_PASSWORD@$SERVICE_HOST/"
     iniset $GYAN_CONF oslo_messaging_rabbit rabbit_userid $RABBIT_USERID
     iniset $GYAN_CONF oslo_messaging_rabbit rabbit_password $RABBIT_PASSWORD
     iniset $GYAN_CONF oslo_messaging_rabbit rabbit_host $RABBIT_HOST
@@ -180,6 +181,7 @@ function create_gyan_conf {
     iniset $GYAN_CONF keystone_authtoken www_authenticate_uri $KEYSTONE_SERVICE_URI_V3
     iniset $GYAN_CONF keystone_authtoken auth_url $KEYSTONE_AUTH_URI_V3
     iniset $GYAN_CONF keystone_authtoken auth_version v3
+    iniset $GYAN_CONF comput host $HOST_IP
 
 
     if is_fedora || is_suse; then
@@ -306,8 +308,12 @@ function start_gyan {
 
     # ``run_process`` checks ``is_service_enabled``, it is not needed here
     mkdir -p /opt/stack/data/gyan
-    start_gyan_api
-    start_gyan_compute
+    if is_service_enabled gyan-api; then
+        start_gyan_api
+    fi
+    if is_service_enabled gyan-compute; then
+        start_gyan_compute
+    fi
 }
 
 # stop_gyan() - Stop running processes (non-screen)

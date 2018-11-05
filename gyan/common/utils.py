@@ -24,6 +24,7 @@ import inspect
 import json
 import mimetypes
 import os
+import zipfile
 
 from oslo_concurrency import processutils
 from oslo_context import context as common_context
