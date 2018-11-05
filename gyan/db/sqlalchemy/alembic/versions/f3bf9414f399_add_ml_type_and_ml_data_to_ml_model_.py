@@ -34,6 +34,5 @@ def upgrade():
         batch_op.add_column(sa.Column('ml_type', sa.String(length=255), nullable=True))
         batch_op.add_column(sa.Column('started_at', sa.DateTime(), nullable=True))
         batch_op.create_unique_constraint('uniq_mlmodel0uuid', ['id'])
-        batch_op.drop_constraint(u'ml_model_ibfk_1', type_='foreignkey')
         
     # ### end Alembic commands ###

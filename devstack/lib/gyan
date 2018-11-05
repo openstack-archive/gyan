@@ -181,7 +181,7 @@ function create_gyan_conf {
     iniset $GYAN_CONF keystone_authtoken www_authenticate_uri $KEYSTONE_SERVICE_URI_V3
     iniset $GYAN_CONF keystone_authtoken auth_url $KEYSTONE_AUTH_URI_V3
     iniset $GYAN_CONF keystone_authtoken auth_version v3
-    iniset $GYAN_CONF comput host $HOST_IP
+    iniset $GYAN_CONF compute host $HOST_IP
 
 
     if is_fedora || is_suse; then
