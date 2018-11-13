@@ -91,6 +91,8 @@ def add_identity_filter(query, value):
         return query.filter_by(id=value)
     elif uuidutils.is_uuid_like(value):
         return query.filter_by(id=value)
+    elif "gyan-" in value:
+        return query.filter_by(id=value)
     else:
         raise exception.InvalidIdentity(identity=value)
 
@@ -240,7 +242,7 @@ class Connection(object):
     def create_ml_model(self, context, values):
         # ensure defaults are present for new ml_models
         if not values.get('id'):
-            values['id'] = uuidutils.generate_uuid()
+            values['id'] = 'gyan-' + uuidutils.generate_uuid()
         ml_model = models.ML_Model()
         ml_model.update(values)
         try:

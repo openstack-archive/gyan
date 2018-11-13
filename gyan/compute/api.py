@@ -23,7 +23,6 @@ from gyan.compute import rpcapi
 import gyan.conf
 from gyan import objects
 
-
 CONF = gyan.conf.CONF
 LOG = logging.getLogger(__name__)
 
@@ -35,11 +34,11 @@ class API(object):
         self.rpcapi = rpcapi.API(context=context)
         super(API, self).__init__()
 
-    def ml_model_create(self, context, new_ml_model, **extra_spec):
+    def ml_model_create(self, context, new_ml_model, host_ip, **extra_spec):
         try:
             host_state = {
-                "host": "localhost"
-            } #self._schedule_ml_model(context, ml_model, extra_spec)
+                "host": host_ip
+            }
         except exception.NoValidHost:
             new_ml_model.status = consts.ERROR
             new_ml_model.status_reason = _(
@@ -53,11 +52,11 @@ class API(object):
             raise
         LOG.debug(host_state)
         return self.rpcapi.ml_model_create(context, host_state['host'],
-                                     new_ml_model)
-    
-    def ml_model_predict(self, context, ml_model_id, **kwargs):
-        return self.rpcapi.ml_model_predict(context, ml_model_id,
-                                     **kwargs)
+                                           new_ml_model)
+
+    def ml_model_predict(self, context, ml_model_id, host_ip, **kwargs):
+        return self.rpcapi.ml_model_predict(context, ml_model_id, host_ip,
+                                            **kwargs)
 
     def ml_model_delete(self, context, ml_model, *args):
         self._record_action_start(context, ml_model, ml_model_actions.DELETE)

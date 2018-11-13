@@ -20,7 +20,8 @@ ml_model_create = {
     'type': 'object',
     'properties': {
         "name": parameter_types.ml_model_name,
-        "type": parameter_types.ml_model_type
+        "type": parameter_types.ml_model_type,
+        "flavor_id": parameter_types.ml_model_flavor_id
     },
     'required': ['name', 'type'],
     'additionalProperties': False

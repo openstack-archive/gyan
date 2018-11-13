@@ -164,11 +164,9 @@ class FlavorController(base.Controller):
         policy.enforce(context, "flavor:create",
                        action="flavor:create")
 
-        LOG.debug("bhaaaaaaaaaaaaaaaaaaaaaaaaaaa")
         LOG.debug(flavor_dict)
         flavor_dict["additional_details"] = json.dumps(flavor_dict["additional_details"])
         LOG.debug(flavor_dict)
-        # flavor_dict["model_data"] = open("/home/bharath/model.zip", "rb").read()
         new_flavor = objects.Flavor(context, **flavor_dict)
         flavor = new_flavor.create(context)
         LOG.debug(new_flavor)

@@ -48,8 +48,8 @@ class API(rpc_service.API):
         self._cast(host, 'ml_model_create', 
                    ml_model=ml_model)
 
-    def ml_model_predict(self, context, ml_model_id, **kwargs):
-        return self._call("localhost", 'ml_model_predict', 
+    def ml_model_predict(self, context, ml_model_id, host_ip, **kwargs):
+        return self._call(host_ip, 'ml_model_predict',
                    ml_model_id=ml_model_id, kwargs=kwargs)
 
     @check_ml_model_host

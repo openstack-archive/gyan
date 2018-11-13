@@ -33,7 +33,7 @@ class Flavor(base.GyanPersistentObject, base.GyanObject):
         'cpu': fields.StringField(nullable=True),
         'memory': fields.StringField(nullable=True),
         'python_version': fields.StringField(nullable=True),
-        'disk': fields.BooleanField(nullable=True),
+        'disk': fields.StringField(nullable=True),
         'additional_details': fields.StringField(nullable=True),
         'created_at': fields.DateTimeField(tzinfo_aware=False, nullable=True),
         'updated_at': fields.DateTimeField(tzinfo_aware=False, nullable=True),

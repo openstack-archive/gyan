@@ -63,7 +63,7 @@ def get_resource(resource, resource_ident):
     context = pecan.request.context
     if context.is_admin:
         context.all_projects = True
-    if uuidutils.is_uuid_like(resource_ident):
+    if uuidutils.is_uuid_like(resource_ident) or 'gyan-' in resource_ident:
         return resource.get_by_uuid(context, resource_ident)
 
     return resource.get_by_name(context, resource_ident)
