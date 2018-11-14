@@ -27,8 +27,9 @@ _basic_keys = (
     'status',
     'status_reason',
     'host_id',
-    'deployed',
-    'ml_type'
+    'ml_type',
+    'flavor_id',
+    'deployed_on'
 )
 
 LOG = logging.getLogger(__name__)
@@ -36,8 +37,6 @@ LOG = logging.getLogger(__name__)
 
 def format_ml_model(context, url, ml_model):
     def transform(key, value):
-        LOG.debug(key)
-        LOG.debug(value)
         if key not in _basic_keys:
             return
         # strip the key if it is not allowed by policy

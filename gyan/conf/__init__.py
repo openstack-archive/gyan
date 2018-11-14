@@ -24,6 +24,7 @@ from gyan.conf import services
 from gyan.conf import ssl
 from gyan.conf import utils
 from gyan.conf import gyan_client
+from gyan.conf import heat_client
 
 CONF = cfg.CONF
 
@@ -36,6 +37,7 @@ path.register_opts(CONF)
 scheduler.register_opts(CONF)
 services.register_opts(CONF)
 gyan_client.register_opts(CONF)
+heat_client.register_opts(CONF)
 ssl.register_opts(CONF)
 profiler.register_opts(CONF)
 utils.register_opts(CONF)

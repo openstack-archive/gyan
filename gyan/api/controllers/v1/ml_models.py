@@ -12,6 +12,11 @@
 
 import base64
 import shlex
+import os
+import time
+import yaml
+
+from eventlet import greenthread
 
 from oslo_log import log as logging
 from oslo_utils import strutils
@@ -31,6 +36,7 @@ from gyan.common import context as gyan_context
 from gyan.common import exception
 from gyan.common.i18n import _
 from gyan.common.policies import ml_model as policies
+from gyan.common import clients
 from gyan.common import policy
 from gyan.common import utils
 import gyan.conf
@@ -38,7 +44,7 @@ from gyan import objects
 
 CONF = gyan.conf.CONF
 LOG = logging.getLogger(__name__)
-
+BASE_TEMPLATE = os.path.join(CONF.state_path, "base.yaml")
 
 def check_policy_on_ml_model(ml_model, action):
     context = pecan.request.context
@@ -81,7 +87,6 @@ class MLModelController(base.Controller):
         'predict': ['POST']
     }
 
-
     @pecan.expose('json')
     @exception.wrap_pecan_controller_exception
     def get_all(self, **kwargs):
@@ -107,7 +112,7 @@ class MLModelController(base.Controller):
         expand = kwargs.pop('expand', None)
 
         ml_model_allowed_filters = ['name', 'status', 'project_id', 'user_id',
-                                     'type']
+                                    'type']
         filters = {}
         for filter_key in ml_model_allowed_filters:
             if filter_key in kwargs:
@@ -119,23 +124,23 @@ class MLModelController(base.Controller):
         marker = kwargs.pop('marker', None)
         if marker:
             marker_obj = objects.ML_Model.get_by_uuid(context,
-                                                       marker)
+                                                      marker)
         if kwargs:
             unknown_params = [str(k) for k in kwargs]
             msg = _("Unknown parameters: %s") % ", ".join(unknown_params)
             raise exception.InvalidValue(msg)
 
         ml_models = objects.ML_Model.list(context,
-                                            limit,
-                                            marker_obj,
-                                            sort_key,
-                                            sort_dir,
-                                            filters=filters)
+                                          limit,
+                                          marker_obj,
+                                          sort_key,
+                                          sort_dir,
+                                          filters=filters)
         return MLModelCollection.convert_with_links(ml_models, limit,
-                                                      url=resource_url,
-                                                      expand=expand,
-                                                      sort_key=sort_key,
-                                                      sort_dir=sort_dir)
+                                                    url=resource_url,
+                                                    expand=expand,
+                                                    sort_key=sort_key,
+                                                    sort_dir=sort_dir)
 
     @pecan.expose('json')
     @exception.wrap_pecan_controller_exception
@@ -152,7 +157,7 @@ class MLModelController(base.Controller):
         ml_model = utils.get_ml_model(ml_model_ident)
         check_policy_on_ml_model(ml_model.as_dict(), "ml_model:get_one")
         return view.format_ml_model(context, pecan.request.host_url,
-                                     ml_model.as_dict())
+                                    ml_model.as_dict())
 
     @base.Controller.api_version("1.0")
     @pecan.expose('json')
@@ -168,9 +173,9 @@ class MLModelController(base.Controller):
         compute_api = pecan.request.compute_api
         new_model = view.format_ml_model(context, pecan.request.host_url,
                                          ml_model.as_dict())
-        compute_api.ml_model_create(context, new_model)
+        # compute_api.ml_model_create(context, new_model)
         return new_model
-    
+
     @base.Controller.api_version("1.0")
     @pecan.expose('json')
     @exception.wrap_pecan_controller_exception
@@ -180,10 +185,13 @@ class MLModelController(base.Controller):
         ml_model = utils.get_ml_model(ml_model_ident)
         pecan.response.status = 200
         compute_api = pecan.request.compute_api
+        host_ip = ml_model.deployed_on
+        LOG.debug(pecan.request.POST['file'])
         predict_dict = {
             "data": base64.b64encode(pecan.request.POST['file'].file.read())
         }
-        prediction = compute_api.ml_model_predict(context, ml_model_ident, **predict_dict)
+        LOG.debug(predict_dict)
+        prediction = compute_api.ml_model_predict(context, ml_model_ident, host_ip, **predict_dict)
         return prediction
 
     @base.Controller.api_version("1.0")
@@ -210,20 +218,22 @@ class MLModelController(base.Controller):
 
         ml_model_dict['status'] = consts.CREATED
         ml_model_dict['ml_type'] = ml_model_dict['type']
+        ml_model_dict['flavor_id'] = ml_model_dict['flavor_id']
         extra_spec = {}
         extra_spec['hints'] = ml_model_dict.get('hints', None)
-        #ml_model_dict["model_data"] = open("/home/bharath/model.zip", "rb").read()
+        # ml_model_dict["model_data"] = open("/home/bharath/model.zip", "rb").read()
         new_ml_model = objects.ML_Model(context, **ml_model_dict)
+        # heat_client = clients.OpenStackClients(context).heat()
+
         ml_model = new_ml_model.create(context)
         LOG.debug(new_ml_model)
-        #compute_api.ml_model_create(context, new_ml_model)
+        # compute_api.ml_model_create(context, new_ml_model)
         # Set the HTTP Location Header
         pecan.response.location = link.build_url('ml_models',
                                                  ml_model.id)
         pecan.response.status = 201
         return view.format_ml_model(context, pecan.request.host_url,
-                                     ml_model.as_dict())
-
+                                    ml_model.as_dict())
 
     @pecan.expose('json')
     @exception.wrap_pecan_controller_exception
@@ -241,8 +251,7 @@ class MLModelController(base.Controller):
         compute_api = pecan.request.compute_api
         ml_model = compute_api.ml_model_update(context, ml_model, patch)
         return view.format_ml_model(context, pecan.request.node_url,
-                                     ml_model.as_dict())
-
+                                    ml_model.as_dict())
 
     @pecan.expose('json')
     @exception.wrap_pecan_controller_exception
@@ -259,6 +268,58 @@ class MLModelController(base.Controller):
         ml_model.destroy(context)
         pecan.response.status = 204
 
+    def _do_compute_node_schedule(self, context, ml_model, url, compute_api, host_url):
+        target_status = "COMPLETE"
+        timeout = 500
+        sleep_interval = 5
+        stack_data = {
+            "files": {},
+            "disable_rollback": True,
+            "parameters": {},
+            "stack_name": "TENSORFLOW",
+            "environment": {}
+        }
+        stack_data["template"] = yaml.safe_load(open(BASE_TEMPLATE))
+        LOG.debug(stack_data)
+        heat_client = clients.OpenStackClients(context).heat()
+        stack = heat_client.stacks.create(**stack_data)
+        LOG.debug(stack)
+        stack_id = stack["stack"]["id"]
+        while True:
+            stack_result = heat_client.stacks.get(stack_id)
+            status = stack_result.status
+            if (status == target_status):
+                break
+        if status == target_status:
+            ml_model.status = consts.DEPLOYED_COMPUTE_NODE
+            ml_model.save(context)
+        else:
+            ml_model.status = consts.DEPLOYMENT_FAILED
+            ml_model.save(context)
+            return
+        host_ip = None
+        stack_result = heat_client.stacks.get(stack_id)
+        for output in stack_result.outputs:
+            if "public" in output["output_key"]:
+                host_ip = output["output_value"]
+        ml_model.deployed_on = host_ip
+        ml_model.save(context)
+        while True:
+            hosts = objects.ComputeHost.list(context)
+            LOG.debug(hosts)
+            LOG.debug(host_ip)
+            for host in hosts:
+                if host_ip == host.hostname:
+                    ml_model.status = consts.DEPLOYED
+                    ml_model.url = url
+                    ml_model.save(context)
+                    ml_model.ml_data = None
+                    new_model = view.format_ml_model(context, host_url,
+                                                     ml_model.as_dict())
+                    compute_api.ml_model_create(context, new_model, host_ip)
+                    return
+            greenthread.sleep(sleep_interval)
+        return None
 
     @pecan.expose('json')
     @exception.wrap_pecan_controller_exception
@@ -267,19 +328,27 @@ class MLModelController(base.Controller):
 
         :param ml_model_ident: UUID or Name of a ML Model.
         """
+
         context = pecan.request.context
         ml_model = utils.get_ml_model(ml_model_ident)
+
+        @utils.synchronized(ml_model.id)
+        def do_compute_schedule(context, ml_model, url, compute_api, host_url):
+            self._do_compute_node_schedule(context, ml_model, url, compute_api, host_url)
+
         check_policy_on_ml_model(ml_model.as_dict(), "ml_model:deploy")
         utils.validate_ml_model_state(ml_model, 'deploy')
         LOG.debug('Calling compute.ml_model_deploy with %s',
                   ml_model.id)
-        ml_model.status =  consts.DEPLOYED
+        ml_model.status = consts.DEPLOYMENT_STARTED
         url = pecan.request.url.replace("deploy", "predict")
-        ml_model.url = url
+        # ml_model.url = url
+        compute_api = pecan.request.compute_api
+        utils.spawn_n(do_compute_schedule, context, ml_model, url, compute_api, pecan.request.host_url)
         ml_model.save(context)
         pecan.response.status = 202
         return view.format_ml_model(context, pecan.request.host_url,
-                                     ml_model.as_dict())
+                                    ml_model.as_dict())
 
     @pecan.expose('json')
     @exception.wrap_pecan_controller_exception
@@ -294,9 +363,9 @@ class MLModelController(base.Controller):
         utils.validate_ml_model_state(ml_model, 'undeploy')
         LOG.debug('Calling compute.ml_model_deploy with %s',
                   ml_model.id)
-        ml_model.status = consts.SCHEDULED
+        ml_model.status = consts.CREATED
         ml_model.url = None
         ml_model.save(context)
         pecan.response.status = 202
         return view.format_ml_model(context, pecan.request.host_url,
-                                     ml_model.as_dict())
+                                    ml_model.as_dict())

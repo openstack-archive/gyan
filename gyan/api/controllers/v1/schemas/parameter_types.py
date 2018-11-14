@@ -147,6 +147,13 @@ ml_model_name = {
     'pattern': '^[a-zA-Z0-9-._]*$'
 }
 
+ml_model_flavor_id = {
+    'type': 'string',
+    'minLength': 1,
+    'maxLength': 255,
+    'pattern': '^[a-zA-Z0-9-._]*$'
+}
+
 ml_model_type = {
     'type': 'string',
     'minLength': 1,

@@ -28,14 +28,15 @@ class ML_Model(base.GyanPersistentObject, base.GyanObject):
     VERSION = '1'
 
     fields = {
-        'id': fields.UUIDField(nullable=True),
+        'id': fields.StringField(nullable=True),
         'name': fields.StringField(nullable=True),
         'project_id': fields.StringField(nullable=True),
         'user_id': fields.StringField(nullable=True),
         'status': fields.StringField(nullable=True),
         'status_reason': fields.StringField(nullable=True),
         'url': fields.StringField(nullable=True),
-        'deployed': fields.BooleanField(nullable=True),
+        'deployed_on': fields.StringField(nullable=True),
+        'flavor_id': fields.StringField(nullable=True),
         'hints': fields.StringField(nullable=True),
         'created_at': fields.DateTimeField(tzinfo_aware=False, nullable=True),
         'updated_at': fields.DateTimeField(tzinfo_aware=False, nullable=True),

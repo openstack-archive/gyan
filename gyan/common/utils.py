@@ -25,8 +25,11 @@ import json
 import mimetypes
 import os
 import zipfile
+import ctypes, os
 
+from oslo_concurrency import lockutils
 from oslo_concurrency import processutils
+from oslo_utils import importutils
 from oslo_context import context as common_context
 from oslo_log import log as logging
 from oslo_utils import excutils
@@ -42,12 +45,16 @@ from gyan.common import privileged
 import gyan.conf
 from gyan import objects
 
+eventlet.monkey_patch()
+
 CONF = gyan.conf.CONF
 LOG = logging.getLogger(__name__)
 
+synchronized = lockutils.synchronized_with_prefix(consts.NAME_PREFIX)
+
 VALID_STATES = {
     'deploy': [consts.CREATED, consts.UNDEPLOYED, consts.SCHEDULED],
-    'undeploy': [consts.DEPLOYED]
+    'undeploy': [consts.DEPLOYED, consts.DEPLOYED_COMPUTE_NODE, consts.DEPLOYMENT_FAILED, consts.DEPLOYMENT_STARTED]
 }
 def safe_rstrip(value, chars=None):
     """Removes trailing characters from a string if that does not make it empty
@@ -101,6 +108,7 @@ def spawn_n(func, *args, **kwargs):
     def context_wrapper(*args, **kwargs):
         # NOTE: If update_store is not called after spawn_n it won't be
         # available for the logger to pull from threadlocal storage.
+        _context.update_store()
         if _context is not None:
             _context.update_store()
         func(*args, **kwargs)

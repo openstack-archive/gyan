@@ -53,8 +53,8 @@ class Manager(periodic_task.PeriodicTasks):
         db_ml_model = objects.ML_Model.get_by_uuid_db(context, ml_model["id"])
         utils.save_model(CONF.state_path, db_ml_model)
         obj_ml_model = objects.ML_Model.get_by_uuid(context, ml_model["id"])
-        obj_ml_model.status = consts.SCHEDULED
-        obj_ml_model.status_reason = "The ML Model is scheduled and saved to the host %s" % self.host
+        #obj_ml_model.status = consts.SCHEDULED
+        #obj_ml_model.status_reason = "The ML Model is scheduled and saved to the host %s" % self.host
         obj_ml_model.save(context)
 
     def ml_model_predict(self, context, ml_model_id, kwargs):
