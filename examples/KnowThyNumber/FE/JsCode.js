@@ -73,7 +73,7 @@ function uploadArea() {
 function getDstImage(data) {
     console.log("Entering into getDstImage")
     var fname = "./img/"
-    switch(data["classification"]) {
+    switch(data["data"]) {
         case 1:
             return fname+"1.jpg"
         case 2:
@@ -98,13 +98,18 @@ function getDstImage(data) {
 }
 
 function uploadArea2() {
-    var canvas = document.getElementById("myCanvas")
+    var canvas = document.getElementById("myCanvas");
+
     canvas.toBlob(
         function (blob) {
             // Do something with the blob object,
             // e.g. creating a multipart form for file uploads:
             var formData = new FormData();
+            var auth_url = document.getElementById("auth_url").value;
+            var token = document.getElementById("token").value;
             formData.append('file', blob, "predict.png");
+            formData.append("auth_url", auth_url);
+            formData.append("token", token);
             $.ajax({
                 url: 'http://localhost:9000/upload/',
                 type: 'POST',
